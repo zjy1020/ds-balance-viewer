@@ -146,11 +146,11 @@ public partial class MainForm : Form
 
         panel.Controls.Add(cardPanel);
 
-        // ---- Token 消耗 ----
-        if (_usage?.Data != null && _usage.Data.Count > 0)
+        // ---- 用量与费用 ----
+        if (_usage?.Daily != null && _usage.Daily.Count > 0)
         {
-            var totalPrompt = _usage.Data.Sum(i => i.PromptTokens);
-            var totalCompletion = _usage.Data.Sum(i => i.CompletionTokens);
+            var totalTokens = _pricing.TotalTokens(_usage.Daily);
+            var totalCalls = _pricing.TotalCalls(_usage.Daily);
 
             var usagePanel = new Panel
             {
@@ -163,7 +163,7 @@ public partial class MainForm : Form
 
             var titleUsage = new Label
             {
-                Text = "📊 本月 Token 消耗",
+                Text = "📊 用量概览",
                 Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
                 Location = new Point(15, 10),
                 AutoSize = true
@@ -172,7 +172,7 @@ public partial class MainForm : Form
 
             var tokenText = new Label
             {
-                Text = $"输入: {totalPrompt:N0} tokens   输出: {totalCompletion:N0} tokens   合计: {totalPrompt + totalCompletion:N0} tokens",
+                Text = $"Token: {totalTokens:N0}   调用次数: {totalCalls:N0}",
                 Font = new Font("Microsoft YaHei", 11),
                 Location = new Point(15, 45),
                 AutoSize = true
@@ -182,7 +182,7 @@ public partial class MainForm : Form
             panel.Controls.Add(usagePanel);
 
             // ---- 费用概览 ----
-            var costThisMonth = _pricing.EstimateCost(_usage.Data);
+            var totalCost = _pricing.TotalCost(_usage.Daily);
             var costPanel = new Panel
             {
                 Width = 700,
@@ -194,7 +194,7 @@ public partial class MainForm : Form
 
             var titleCost = new Label
             {
-                Text = "💵 本月费用估算",
+                Text = "💵 本月费用",
                 Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
                 Location = new Point(15, 10),
                 AutoSize = true
@@ -203,7 +203,7 @@ public partial class MainForm : Form
 
             var costValue = new Label
             {
-                Text = $"¥{costThisMonth:N2}（根据官方定价估算）",
+                Text = $"¥{totalCost:N4}",
                 Font = new Font("Microsoft YaHei", 16, FontStyle.Bold),
                 ForeColor = Color.DarkOrange,
                 Location = new Point(15, 42),
@@ -302,7 +302,8 @@ public partial class MainForm : Form
     {
         tabUsage.Controls.Clear();
 
-        if (_usage?.Data == null || _usage.Data.Count == 0)
+        var byModel = _usage?.ByModel;
+        if (byModel == null || byModel.Count == 0)
         {
             tabUsage.Controls.Add(new Label
             {
@@ -312,18 +313,6 @@ public partial class MainForm : Form
             });
             return;
         }
-
-        // 按模型分组汇总
-        var grouped = _usage.Data
-            .GroupBy(i => i.Model)
-            .Select(g => new
-            {
-                Model = g.Key,
-                PromptTokens = g.Sum(i => i.PromptTokens),
-                CompletionTokens = g.Sum(i => i.CompletionTokens),
-                TotalTokens = g.Sum(i => i.TotalTokens)
-            })
-            .ToList();
 
         var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20) };
 
@@ -349,22 +338,18 @@ public partial class MainForm : Form
         };
 
         grid.Columns.Add("Model", "模型");
-        grid.Columns.Add("PromptTokens", "输入 Token");
-        grid.Columns.Add("CompletionTokens", "输出 Token");
-        grid.Columns.Add("TotalTokens", "总 Token");
+        grid.Columns.Add("Calls", "调用次数");
+        grid.Columns.Add("Tokens", "Token 消耗");
+        grid.Columns.Add("Cost", "费用");
 
-        foreach (var item in grouped)
+        foreach (var item in byModel)
         {
-            grid.Rows.Add(
-                item.Model,
-                $"{item.PromptTokens:N0}",
-                $"{item.CompletionTokens:N0}",
-                $"{item.TotalTokens:N0}");
+            grid.Rows.Add(item.Model, $"{item.Calls:N0}", $"{item.Tokens:N0}", $"¥{item.Cost:N4}");
         }
 
-        grid.Columns["PromptTokens"].DefaultCellStyle.Format = "N0";
-        grid.Columns["CompletionTokens"].DefaultCellStyle.Format = "N0";
-        grid.Columns["TotalTokens"].DefaultCellStyle.Format = "N0";
+        grid.Columns["Calls"].DefaultCellStyle.Format = "N0";
+        grid.Columns["Tokens"].DefaultCellStyle.Format = "N0";
+        grid.Columns["Cost"].DefaultCellStyle.Format = "C";
 
         panel.Controls.Add(grid);
         tabUsage.Controls.Add(panel);
@@ -374,7 +359,8 @@ public partial class MainForm : Form
     {
         tabCost.Controls.Clear();
 
-        if (_usage?.Data == null || _usage.Data.Count == 0)
+        var daily = _usage?.Daily;
+        if (daily == null || daily.Count == 0)
         {
             tabCost.Controls.Add(new Label
             {
@@ -396,33 +382,13 @@ public partial class MainForm : Form
         };
         panel.Controls.Add(title);
 
-        var disclaimer = new Label
-        {
-            Text = "⚠️ 费用根据官方定价估算，仅供参考，实际扣费以账单为准",
-            Font = new Font("Microsoft YaHei", 9),
-            ForeColor = Color.DarkOrange,
-            Location = new Point(20, 42),
-            AutoSize = true
-        };
-        panel.Controls.Add(disclaimer);
-
-        // 按日期汇总
-        var byDate = _usage.Data
-            .GroupBy(i => i.Date)
-            .Select(g => new
-            {
-                Date = g.Key,
-                TotalTokens = g.Sum(i => i.TotalTokens),
-                EstimatedCost = _pricing.EstimateCost(g)
-            })
-            .OrderByDescending(x => x.Date)
-            .ToList();
+        var sorted = daily.OrderByDescending(d => d.Date).ToList();
 
         var grid = new DataGridView
         {
-            Location = new Point(20, 75),
+            Location = new Point(20, 50),
             Width = 740,
-            Height = 450,
+            Height = 480,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
@@ -431,14 +397,16 @@ public partial class MainForm : Form
         };
 
         grid.Columns.Add("Date", "日期");
+        grid.Columns.Add("Calls", "调用次数");
         grid.Columns.Add("Tokens", "Token 消耗");
-        grid.Columns.Add("Cost", "估算费用");
+        grid.Columns.Add("Cost", "费用");
 
-        foreach (var item in byDate)
+        foreach (var item in sorted)
         {
-            grid.Rows.Add(item.Date, $"{item.TotalTokens:N0}", $"¥{item.EstimatedCost:N4}");
+            grid.Rows.Add(item.Date, $"{item.Calls:N0}", $"{item.Tokens:N0}", $"¥{item.Cost:N4}");
         }
 
+        grid.Columns["Calls"].DefaultCellStyle.Format = "N0";
         grid.Columns["Tokens"].DefaultCellStyle.Format = "N0";
         grid.Columns["Cost"].DefaultCellStyle.Format = "C";
 

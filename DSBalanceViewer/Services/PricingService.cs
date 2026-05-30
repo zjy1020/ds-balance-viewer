@@ -5,44 +5,34 @@ namespace DSBalanceViewer.Services;
 public class PricingService
 {
     // 价格单位: 元/百万 token（DeepSeek 官方定价，2025 年）
-    // 输入价格 / 输出价格
+    // 输入价格 / 输出价格（用于 API 不返回 cost 时的后备估算）
     private readonly Dictionary<string, (decimal Input, decimal Output)> _pricing = new()
     {
         ["deepseek-chat"] = (1.00m, 2.00m),
         ["deepseek-reasoner"] = (4.00m, 16.00m),
     };
 
-    public decimal EstimateCost(IEnumerable<UsageItem> items)
+    /// <summary>从 API 返回的 daily 数据汇总总费用（API 已计算好 cost）</summary>
+    public decimal TotalCost(IEnumerable<UsagePoint> daily)
     {
-        decimal total = 0;
-        foreach (var item in items)
-        {
-            var (inputPrice, outputPrice) = GetPrice(item.Model);
-            total += (item.PromptTokens / 1_000_000m) * inputPrice;
-            total += (item.CompletionTokens / 1_000_000m) * outputPrice;
-        }
-        return Math.Round(total, 2);
+        return Math.Round(daily.Sum(d => d.Cost), 4);
     }
 
-    public (decimal InputPrice, decimal OutputPrice) GetPrice(string model)
+    /// <summary>从 API 返回的 daily 数据汇总总 Token</summary>
+    public long TotalTokens(IEnumerable<UsagePoint> daily)
     {
-        if (_pricing.TryGetValue(model, out var price))
-            return price;
-        // 未知模型默认按 deepseek-chat 价格
-        return _pricing["deepseek-chat"];
+        return daily.Sum(d => d.Tokens);
     }
 
-    public Dictionary<string, decimal> EstimateCostByDate(IEnumerable<UsageItem> items)
+    /// <summary>从 API 返回的 daily 数据汇总总调用次数</summary>
+    public long TotalCalls(IEnumerable<UsagePoint> daily)
     {
-        return items
-            .GroupBy(i => i.Date)
-            .ToDictionary(g => g.Key, g => EstimateCost(g));
+        return daily.Sum(d => d.Calls);
     }
 
-    public Dictionary<string, decimal> EstimateCostByModel(IEnumerable<UsageItem> items)
+    /// <summary>按模型汇总费用</summary>
+    public Dictionary<string, decimal> CostByModel(IEnumerable<ModelUsage> byModel)
     {
-        return items
-            .GroupBy(i => i.Model)
-            .ToDictionary(g => g.Key, g => EstimateCost(g));
+        return byModel.ToDictionary(m => m.Model, m => m.Cost);
     }
 }

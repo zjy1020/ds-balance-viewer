@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DSBalanceViewer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7ffc9b573c87208320535313be0de2755581fbaf")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+24097b4961670c97aebbabb41a3c6cb3d9e3f211")]
 [assembly: System.Reflection.AssemblyProductAttribute("DSBalanceViewer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DSBalanceViewer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

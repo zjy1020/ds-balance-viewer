@@ -29,11 +29,11 @@ public class DeepSeekApiService
 
     public async Task<UsageResponse> GetUsageAsync()
     {
-        var response = await _http.GetAsync($"{BaseUrl}/user/usage");
+        var response = await _http.GetAsync($"{BaseUrl}/billing/usage");
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<UsageResponse>(json)
-               ?? throw new InvalidOperationException("Failed to parse usage response");
+               ?? new UsageResponse();
     }
 
     public void Dispose() => _http.Dispose();

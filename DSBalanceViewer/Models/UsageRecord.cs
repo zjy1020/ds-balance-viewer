@@ -4,24 +4,39 @@ namespace DSBalanceViewer.Models;
 
 public class UsageResponse
 {
-    [JsonPropertyName("data")]
-    public List<UsageItem> Data { get; set; } = new();
+    [JsonPropertyName("daily")]
+    public List<UsagePoint> Daily { get; set; } = new();
+
+    [JsonPropertyName("by_model")]
+    public List<ModelUsage> ByModel { get; set; } = new();
 }
 
-public class UsageItem
+public class UsagePoint
 {
     [JsonPropertyName("date")]
     public string Date { get; set; } = "";
 
+    [JsonPropertyName("calls")]
+    public long Calls { get; set; }
+
+    [JsonPropertyName("tokens")]
+    public long Tokens { get; set; }
+
+    [JsonPropertyName("cost")]
+    public decimal Cost { get; set; }
+}
+
+public class ModelUsage
+{
     [JsonPropertyName("model")]
     public string Model { get; set; } = "";
 
-    [JsonPropertyName("prompt_tokens")]
-    public long PromptTokens { get; set; }
+    [JsonPropertyName("calls")]
+    public long Calls { get; set; }
 
-    [JsonPropertyName("completion_tokens")]
-    public long CompletionTokens { get; set; }
+    [JsonPropertyName("tokens")]
+    public long Tokens { get; set; }
 
-    [JsonPropertyName("total_tokens")]
-    public long TotalTokens { get; set; }
+    [JsonPropertyName("cost")]
+    public decimal Cost { get; set; }
 }
