@@ -10,12 +10,102 @@ public partial class MainForm : Form
     private DeepSeekApiService? _api;
     private BalanceResponse? _balance;
     private UsageResponse? _usage;
+    private NotifyIcon? _trayIcon;
+    private ContextMenuStrip? _trayMenu;
 
     public MainForm()
     {
         InitializeComponent();
         btnRefresh.Click += async (_, _) => await RefreshData();
         btnChangeKey.Click += (_, _) => ShowKeyManager();
+        InitializeTrayIcon();
+    }
+
+    // ========== System Tray ==========
+
+    private void InitializeTrayIcon()
+    {
+        _trayMenu = new ContextMenuStrip();
+        _trayMenu.Items.Add("显示主窗口", null, (_, _) => ShowWindow());
+        _trayMenu.Items.Add("刷新", null, async (_, _) => await RefreshData());
+        _trayMenu.Items.Add(new ToolStripSeparator());
+        _trayMenu.Items.Add("退出", null, (_, _) =>
+        {
+            _trayIcon!.Visible = false;
+            Application.Exit();
+        });
+
+        var icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application;
+        this.Icon = icon;
+
+        _trayIcon = new NotifyIcon
+        {
+            Icon = icon,
+            Text = "DeepSeek 用量仪表盘",
+            ContextMenuStrip = _trayMenu,
+            Visible = true
+        };
+        _trayIcon.DoubleClick += (_, _) => ShowWindow();
+    }
+
+    private void ShowWindow()
+    {
+        this.Show();
+        this.WindowState = FormWindowState.Normal;
+        this.Activate();
+    }
+
+    protected override void OnResize(EventArgs e)
+    {
+        base.OnResize(e);
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (e.CloseReason == CloseReason.UserClosing)
+        {
+            var selected = ShowCloseChoiceDialog();
+            if (selected == "托盘")
+            {
+                e.Cancel = true;
+                WindowState = FormWindowState.Minimized;
+                Hide();
+                return;
+            }
+            if (selected == null)
+            {
+                e.Cancel = true;
+                return;
+            }
+        }
+
+        if (_trayIcon != null)
+        {
+            _trayIcon.Visible = false;
+            _trayIcon.Dispose();
+        }
+        _trayMenu?.Dispose();
+        base.OnFormClosing(e);
+    }
+
+    private static string? ShowCloseChoiceDialog()
+    {
+        var btnTray = new TaskDialogButton("最小化到系统托盘(&T)");
+        var btnExit = new TaskDialogButton("完全退出(&Q)");
+        var btnCancel = TaskDialogButton.Cancel;
+
+        var page = new TaskDialogPage
+        {
+            Heading = "关闭 DeepSeek 用量仪表盘",
+            Text = "请选择关闭操作：",
+            Buttons = { btnTray, btnExit, btnCancel },
+            Icon = TaskDialogIcon.Information
+        };
+
+        var result = TaskDialog.ShowDialog(page);
+        if (result == btnTray) return "托盘";
+        if (result == btnExit) return "退出";
+        return null;
     }
 
     protected override async void OnShown(EventArgs e)
@@ -72,7 +162,7 @@ public partial class MainForm : Form
     private string? ShowNewKeyDialog()
     {
         var input = Microsoft.VisualBasic.Interaction.InputBox(
-            "请输入 DeepSeek API Key：\n\n格式: 名称=sk-xxxx\n不加名称则默认为「默认」",
+            "请输入 DeepSeek API Key：\n\n格式: 名称=sk-xxxx\n不加名称则自动生成名称",
             "添加 API Key", "", -1, -1);
         if (string.IsNullOrWhiteSpace(input)) return null;
 
@@ -83,14 +173,21 @@ public partial class MainForm : Form
         }
         else
         {
-            _vault.SaveKey("默认", input.Trim());
+            var existing = _vault.ListKeys();
+            var name = "默认";
+            if (existing.Any(k => k.Name == name))
+            {
+                int n = 2;
+                while (existing.Any(k => k.Name == $"Key {n}")) n++;
+                name = $"Key {n}";
+            }
+            _vault.SaveKey(name, input.Trim());
         }
         return _vault.GetActiveKey();
     }
 
     private void ShowKeyManager()
     {
-        var keys = _vault.ListKeys();
         var dlg = new Form
         {
             Text = "管理 API Keys",
@@ -108,9 +205,16 @@ public partial class MainForm : Form
             Size = new Size(360, 150),
             IntegralHeight = false
         };
-        foreach (var k in keys)
-            list.Items.Add(k.IsActive ? $"[当前] {k.Name}" : $"        {k.Name}");
         dlg.Controls.Add(list);
+
+        void RefreshList()
+        {
+            var keys = _vault.ListKeys();
+            list.Items.Clear();
+            foreach (var k in keys)
+                list.Items.Add(k.IsActive ? $"[当前] {k.Name}" : $"        {k.Name}");
+        }
+        RefreshList();
 
         Button btn(string t, int x) => new() { Text = t, Location = new Point(x, 172), Size = new Size(80, 28) };
         var bUse = btn("使用", 12);
@@ -120,21 +224,27 @@ public partial class MainForm : Form
 
         bUse.Click += (_, _) =>
         {
+            var keys = _vault.ListKeys();
             if (list.SelectedIndex >= 0 && list.SelectedIndex < keys.Count)
             {
                 _vault.SetActive(keys[list.SelectedIndex].Name);
-                dlg.Close();
+                RefreshList();
                 lblStatus.Text = $"已切换到「{keys[list.SelectedIndex].Name}」";
             }
         };
-        bAdd.Click += (_, _) => { var k = ShowNewKeyDialog(); if (k != null) dlg.Close(); };
+        bAdd.Click += (_, _) =>
+        {
+            var k = ShowNewKeyDialog();
+            if (k != null) RefreshList();
+        };
         bDel.Click += (_, _) =>
         {
+            var keys = _vault.ListKeys();
             if (list.SelectedIndex >= 0 && list.SelectedIndex < keys.Count
-                && MessageBox.Show("确定删除？", "", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                && MessageBox.Show($"确定删除「{keys[list.SelectedIndex].Name}」？", "确认删除", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 _vault.DeleteKey(keys[list.SelectedIndex].Name);
-                dlg.Close();
+                RefreshList();
             }
         };
         bClose.Click += (_, _) => dlg.Close();
@@ -153,14 +263,14 @@ public partial class MainForm : Form
         mainPanel.Controls.Clear();
         var parent = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            AutoScroll = false
+            WrapContents = false
         };
         mainPanel.Controls.Add(parent);
 
-        // ── Balance Section ──
         var bal = _balance?.BalanceInfos?.FirstOrDefault();
         if (bal != null)
         {
@@ -184,7 +294,6 @@ public partial class MainForm : Form
             parent.Controls.Add(Placeholder("暂无余额数据"));
         }
 
-        // ── Usage by Model Section ──
         parent.Controls.Add(SectionTitle("用量（按模型）"));
         var byModel = _usage?.ByModel;
         if (byModel != null && byModel.Count > 0)
@@ -196,7 +305,6 @@ public partial class MainForm : Form
             parent.Controls.Add(Placeholder("暂无用量数据（/billing/usage 返回为空或 404）"));
         }
 
-        // ── Recent Activity Section ──
         parent.Controls.Add(SectionTitle("近期活动"));
         var daily = _usage?.Daily;
         if (daily != null && daily.Count > 0)

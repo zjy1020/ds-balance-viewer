@@ -23,24 +23,29 @@ partial class MainForm
 
         this.SuspendLayout();
 
-        // status bar at bottom
-        var statusBar = new Panel
+        // status bar at bottom — TableLayoutPanel avoids Dock conflicts
+        var statusBar = new TableLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 30,
+            Height = 36,
+            ColumnCount = 3,
+            RowCount = 1,
             Padding = new Padding(10, 4, 10, 4)
         };
+        statusBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        statusBar.ColumnStyles.Add(new ColumnStyle());
+        statusBar.ColumnStyles.Add(new ColumnStyle());
 
         this.lblStatus.Text = "就绪";
         this.lblStatus.Dock = DockStyle.Fill;
         this.lblStatus.TextAlign = ContentAlignment.MiddleLeft;
 
-        this.btnChangeKey = new Button { Text = "更换Key", AutoSize = true, Dock = DockStyle.Right };
-        this.btnRefresh = new Button { Text = "刷新", AutoSize = true, Dock = DockStyle.Right };
+        this.btnRefresh = new Button { Text = "刷新", AutoSize = true };
+        this.btnChangeKey = new Button { Text = "更换 Key", AutoSize = true };
 
-        statusBar.Controls.Add(this.lblStatus);
-        statusBar.Controls.Add(this.btnRefresh);
-        statusBar.Controls.Add(this.btnChangeKey);
+        statusBar.Controls.Add(this.lblStatus, 0, 0);
+        statusBar.Controls.Add(this.btnRefresh, 1, 0);
+        statusBar.Controls.Add(this.btnChangeKey, 2, 0);
 
         // main scrollable area
         this.mainPanel = new Panel

@@ -1,0 +1,20 @@
+## Build outputs
+DSBalanceViewer/bin/
+DSBalanceViewer/obj/
+DSBalanceViewer/publish/
+DSBalanceViewer/publish-self/
+
+## IDE
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+
+## Windows
+Thumbs.db
+Desktop.ini
+
+## .NET
+*.nupkg
+*.snk
