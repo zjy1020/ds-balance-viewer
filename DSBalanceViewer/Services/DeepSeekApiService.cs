@@ -30,6 +30,8 @@ public class DeepSeekApiService
     public async Task<UsageResponse> GetUsageAsync()
     {
         var response = await _http.GetAsync($"{BaseUrl}/billing/usage");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return new UsageResponse(); // 404 = 该账户暂无用量数据
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync();
         return JsonSerializer.Deserialize<UsageResponse>(json)

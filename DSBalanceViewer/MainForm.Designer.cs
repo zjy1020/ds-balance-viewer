@@ -9,6 +9,7 @@ partial class MainForm
     private TabPage tabUsage;
     private TabPage tabCost;
     private Button btnRefresh;
+    private Button btnChangeKey;
     private Label lblStatus;
 
     protected override void Dispose(bool disposing)
@@ -25,6 +26,7 @@ partial class MainForm
         this.tabUsage = new TabPage();
         this.tabCost = new TabPage();
         this.btnRefresh = new Button();
+        this.btnChangeKey = new Button();
         this.lblStatus = new Label();
 
         this.tabControl.SuspendLayout();
@@ -58,6 +60,12 @@ partial class MainForm
         // btnRefresh
         this.btnRefresh.Text = "刷新";
         this.btnRefresh.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+        this.btnRefresh.Width = 60;
+
+        // btnChangeKey
+        this.btnChangeKey.Text = "更换Key";
+        this.btnChangeKey.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+        this.btnChangeKey.Width = 75;
 
         // lblStatus
         this.lblStatus.Text = "就绪";
@@ -70,8 +78,10 @@ partial class MainForm
             Height = 40,
             Padding = new Padding(10, 5, 10, 5)
         };
+        statusPanel.Controls.Add(btnChangeKey);
         statusPanel.Controls.Add(btnRefresh);
         statusPanel.Controls.Add(lblStatus);
+        btnChangeKey.Location = new Point(statusPanel.Width - 190, 7);
         btnRefresh.Location = new Point(statusPanel.Width - 110, 7);
         lblStatus.Location = new Point(10, 10);
         lblStatus.AutoSize = true;

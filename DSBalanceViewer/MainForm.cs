@@ -15,6 +15,7 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         btnRefresh.Click += async (_, _) => await RefreshData();
+        btnChangeKey.Click += (_, _) => ChangeKey();
     }
 
     protected override async void OnShown(EventArgs e)
@@ -51,12 +52,14 @@ public partial class MainForm : Form
 
             lblStatus.Text = $"最后更新: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                                              || ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
             _vault.DeleteKey();
             lblStatus.Text = "Key 无效，请重新输入";
             lblStatus.ForeColor = Color.Red;
             MessageBox.Show("API Key 无效，请重新输入。", "认证失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            ChangeKey();
         }
         catch (Exception ex)
         {
@@ -89,6 +92,18 @@ public partial class MainForm : Form
 
         _vault.SaveKey(input.Trim());
         return input.Trim();
+    }
+
+    private void ChangeKey()
+    {
+        _vault.DeleteKey();
+        var input = Microsoft.VisualBasic.Interaction.InputBox(
+            "请输入新的 DeepSeek API Key：", "更换 API Key", "", -1, -1);
+        if (!string.IsNullOrWhiteSpace(input))
+        {
+            _vault.SaveKey(input.Trim());
+            lblStatus.Text = "Key 已更新，点击刷新";
+        }
     }
 
     // ---- Build methods for each tab ----
