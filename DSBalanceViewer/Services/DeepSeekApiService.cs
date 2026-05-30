@@ -1,0 +1,40 @@
+using System.Net.Http.Headers;
+using System.Text.Json;
+using DSBalanceViewer.Models;
+
+namespace DSBalanceViewer.Services;
+
+public class DeepSeekApiService
+{
+    private readonly HttpClient _http;
+    private const string BaseUrl = "https://api.deepseek.com";
+
+    public DeepSeekApiService(string apiKey)
+    {
+        _http = new HttpClient();
+        _http.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", apiKey);
+        _http.DefaultRequestHeaders.Accept.Add(
+            new MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+    public async Task<BalanceResponse> GetBalanceAsync()
+    {
+        var response = await _http.GetAsync($"{BaseUrl}/user/balance");
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        return JsonSerializer.Deserialize<BalanceResponse>(json)
+               ?? throw new InvalidOperationException("Failed to parse balance response");
+    }
+
+    public async Task<UsageResponse> GetUsageAsync()
+    {
+        var response = await _http.GetAsync($"{BaseUrl}/user/usage");
+        response.EnsureSuccessStatusCode();
+        var json = await response.Content.ReadAsStringAsync();
+        return JsonSerializer.Deserialize<UsageResponse>(json)
+               ?? throw new InvalidOperationException("Failed to parse usage response");
+    }
+
+    public void Dispose() => _http.Dispose();
+}
