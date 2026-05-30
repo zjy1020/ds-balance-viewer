@@ -1,0 +1,14 @@
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\bin\Debug\net8.0-windows\DSBalanceViewer.exe
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\bin\Debug\net8.0-windows\DSBalanceViewer.deps.json
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\bin\Debug\net8.0-windows\DSBalanceViewer.runtimeconfig.json
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\bin\Debug\net8.0-windows\DSBalanceViewer.dll
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\bin\Debug\net8.0-windows\DSBalanceViewer.pdb
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\DSBalanceViewer.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\DSBalanceViewer.AssemblyInfoInputs.cache
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\DSBalanceViewer.AssemblyInfo.cs
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\DSBalanceViewer.csproj.CoreCompileInputs.cache
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\DSBalanceViewer.dll
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\refint\DSBalanceViewer.dll
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\DSBalanceViewer.pdb
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\DSBalanceViewer.genruntimeconfig.cache
+C:\Users\YBY\Desktop\ds-balance-viewer\DSBalanceViewer\obj\Debug\net8.0-windows\ref\DSBalanceViewer.dll
