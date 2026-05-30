@@ -112,54 +112,23 @@ public partial class MainForm : Form
     {
         tabDashboard.Controls.Clear();
 
-        var panel = new FlowLayoutPanel
+        var main = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            Padding = new Padding(20),
+            ColumnCount = 1,
+            Padding = new Padding(16),
             AutoScroll = true
         };
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         // ---- 余额卡片 ----
         var balance = _balance?.BalanceInfos?.FirstOrDefault();
-        var cardPanel = new Panel
-        {
-            Width = 700,
-            Height = 120,
-            BackColor = Color.FromArgb(240, 248, 255),
-            Padding = new Padding(15)
-        };
-
-        var titleBalance = new Label
-        {
-            Text = "💰 余额",
-            Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
-            Location = new Point(15, 10),
-            AutoSize = true
-        };
-        cardPanel.Controls.Add(titleBalance);
-
-        var totalLabel = new Label
-        {
-            Text = $"总余额: ¥{balance?.TotalBalance ?? "—"}",
-            Font = new Font("Microsoft YaHei", 20, FontStyle.Bold),
-            ForeColor = Color.FromArgb(0, 120, 212),
-            Location = new Point(15, 40),
-            AutoSize = true
-        };
-        cardPanel.Controls.Add(totalLabel);
-
-        var grantedLabel = new Label
-        {
-            Text = $"赠送余额: ¥{balance?.GrantedBalance ?? "—"}   充值余额: ¥{balance?.ToppedUpBalance ?? "—"}",
-            Font = new Font("Microsoft YaHei", 10),
-            ForeColor = Color.Gray,
-            Location = new Point(15, 80),
-            AutoSize = true
-        };
-        cardPanel.Controls.Add(grantedLabel);
-
-        panel.Controls.Add(cardPanel);
+        var card = MakeCard("💰 余额", Color.FromArgb(240, 248, 255), new (string, FontStyle, Color)[] {
+            ($"总余额: ¥{balance?.TotalBalance ?? "—"}", FontStyle.Bold, Color.FromArgb(0, 120, 212)),
+            ($"赠送余额: ¥{balance?.GrantedBalance ?? "—"}   充值余额: ¥{balance?.ToppedUpBalance ?? "—"}", FontStyle.Regular, Color.Gray),
+        });
+        main.Controls.Add(card);
+        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         // ---- 用量与费用 ----
         if (_usage?.Daily != null && _usage.Daily.Count > 0)
@@ -167,96 +136,98 @@ public partial class MainForm : Form
             var totalTokens = _pricing.TotalTokens(_usage.Daily);
             var totalCalls = _pricing.TotalCalls(_usage.Daily);
 
-            var usagePanel = new Panel
-            {
-                Width = 700,
-                Height = 100,
-                BackColor = Color.FromArgb(245, 255, 245),
-                Padding = new Padding(15),
-                Margin = new Padding(0, 15, 0, 0)
-            };
+            var usageCard = MakeCard("📊 用量概览", Color.FromArgb(245, 255, 245), new (string, FontStyle, Color)[] {
+                ($"Token: {totalTokens:N0}   调用次数: {totalCalls:N0}", FontStyle.Regular, Color.Black),
+            });
+            main.Controls.Add(usageCard);
+            main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            var titleUsage = new Label
-            {
-                Text = "📊 用量概览",
-                Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
-                Location = new Point(15, 10),
-                AutoSize = true
-            };
-            usagePanel.Controls.Add(titleUsage);
-
-            var tokenText = new Label
-            {
-                Text = $"Token: {totalTokens:N0}   调用次数: {totalCalls:N0}",
-                Font = new Font("Microsoft YaHei", 11),
-                Location = new Point(15, 45),
-                AutoSize = true
-            };
-            usagePanel.Controls.Add(tokenText);
-
-            panel.Controls.Add(usagePanel);
-
-            // ---- 费用概览 ----
             var totalCost = _pricing.TotalCost(_usage.Daily);
-            var costPanel = new Panel
-            {
-                Width = 700,
-                Height = 80,
-                BackColor = Color.FromArgb(255, 250, 240),
-                Padding = new Padding(15),
-                Margin = new Padding(0, 15, 0, 0)
-            };
-
-            var titleCost = new Label
-            {
-                Text = "💵 本月费用",
-                Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
-                Location = new Point(15, 10),
-                AutoSize = true
-            };
-            costPanel.Controls.Add(titleCost);
-
-            var costValue = new Label
-            {
-                Text = $"¥{totalCost:N4}",
-                Font = new Font("Microsoft YaHei", 16, FontStyle.Bold),
-                ForeColor = Color.DarkOrange,
-                Location = new Point(15, 42),
-                AutoSize = true
-            };
-            costPanel.Controls.Add(costValue);
-
-            panel.Controls.Add(costPanel);
+            var costCard = MakeCard("💵 本月费用", Color.FromArgb(255, 250, 240), new (string, FontStyle, Color)[] {
+                ($"¥{totalCost:N4}", FontStyle.Bold, Color.DarkOrange),
+            });
+            main.Controls.Add(costCard);
+            main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         }
 
-        tabDashboard.Controls.Add(panel);
+        // 填充剩余空间
+        main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        main.Controls.Add(new Panel());
+
+        tabDashboard.Controls.Add(main);
+    }
+
+    // Helper: create a styled card panel
+    private Panel MakeCard(string title, Color backColor, (string Text, FontStyle Style, Color Color)[] lines)
+    {
+        var card = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 110,
+            BackColor = backColor,
+            Padding = new Padding(16),
+            Margin = new Padding(0, 0, 0, 12)
+        };
+
+        var titleLabel = new Label
+        {
+            Text = title,
+            Font = new Font("Microsoft YaHei", 13, FontStyle.Bold),
+            Dock = DockStyle.Top,
+            Height = 28
+        };
+        card.Controls.Add(titleLabel);
+
+        var y = 34;
+        foreach (var (text, style, color) in lines)
+        {
+            var fontStyle = style == FontStyle.Bold
+                ? new Font("Microsoft YaHei", style == FontStyle.Bold ? 18 : 10, style)
+                : new Font("Microsoft YaHei", 10);
+            var lbl = new Label
+            {
+                Text = text,
+                Font = fontStyle,
+                ForeColor = color,
+                Location = new Point(16, y),
+                AutoSize = true
+            };
+            card.Controls.Add(lbl);
+            y += style == FontStyle.Bold ? 34 : 22;
+        }
+
+        return card;
     }
 
     private void BuildBalanceTab()
     {
         tabBalance.Controls.Clear();
 
-        var panel = new FlowLayoutPanel
+        var main = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            Padding = new Padding(40, 30, 40, 30),
+            ColumnCount = 1,
+            Padding = new Padding(40, 24, 40, 24),
             AutoScroll = true
         };
+        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         var title = new Label
         {
             Text = "💰 账户余额",
             Font = new Font("Microsoft YaHei", 18, FontStyle.Bold),
-            AutoSize = true
+            Dock = DockStyle.Top,
+            Height = 36,
+            Margin = new Padding(0, 0, 0, 16)
         };
-        panel.Controls.Add(title);
+        main.Controls.Add(title);
+        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var balance = _balance?.BalanceInfos?.FirstOrDefault();
         if (balance == null)
         {
-            panel.Controls.Add(new Label { Text = "暂无数据", AutoSize = true });
-            tabBalance.Controls.Add(panel);
+            main.Controls.Add(new Label { Text = "暂无数据", AutoSize = true });
+            tabBalance.Controls.Add(main);
             return;
         }
 
@@ -271,10 +242,10 @@ public partial class MainForm : Form
         {
             var card = new Panel
             {
-                Width = 500,
+                Dock = DockStyle.Top,
                 Height = 90,
                 BackColor = Color.White,
-                Margin = new Padding(0, 15, 0, 0),
+                Margin = new Padding(0, 0, 0, 12),
                 Padding = new Padding(20)
             };
 
@@ -298,19 +269,25 @@ public partial class MainForm : Form
             };
             card.Controls.Add(val);
 
-            panel.Controls.Add(card);
+            main.Controls.Add(card);
+            main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         }
 
-        panel.Controls.Add(new Label
+        main.Controls.Add(new Label
         {
             Text = $"币种: {balance.Currency}",
             Font = new Font("Microsoft YaHei", 10),
             ForeColor = Color.Gray,
-            Margin = new Padding(0, 15, 0, 0),
+            Margin = new Padding(0, 4, 0, 0),
             AutoSize = true
         });
+        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        tabBalance.Controls.Add(panel);
+        // fill rest
+        main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        main.Controls.Add(new Panel());
+
+        tabBalance.Controls.Add(main);
     }
 
     private void BuildUsageTab()
@@ -320,36 +297,37 @@ public partial class MainForm : Form
         var byModel = _usage?.ByModel;
         if (byModel == null || byModel.Count == 0)
         {
-            tabUsage.Controls.Add(new Label
+            var empty = new Label
             {
                 Text = "暂无用量数据",
-                Location = new Point(20, 20),
-                AutoSize = true
-            });
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            tabUsage.Controls.Add(empty);
             return;
         }
 
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20) };
+        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
 
         var title = new Label
         {
             Text = "📈 Token 用量（按模型）",
-            Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
-            Location = new Point(20, 15),
-            AutoSize = true
+            Font = new Font("Microsoft YaHei", 13, FontStyle.Bold),
+            Dock = DockStyle.Top,
+            Height = 30
         };
         panel.Controls.Add(title);
 
         var grid = new DataGridView
         {
-            Location = new Point(20, 50),
-            Width = 740,
-            Height = 480,
+            Dock = DockStyle.Fill,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
-            RowHeadersVisible = false
+            RowHeadersVisible = false,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.Fixed3D
         };
 
         grid.Columns.Add("Model", "模型");
@@ -358,9 +336,7 @@ public partial class MainForm : Form
         grid.Columns.Add("Cost", "费用");
 
         foreach (var item in byModel)
-        {
             grid.Rows.Add(item.Model, $"{item.Calls:N0}", $"{item.Tokens:N0}", $"¥{item.Cost:N4}");
-        }
 
         grid.Columns["Calls"].DefaultCellStyle.Format = "N0";
         grid.Columns["Tokens"].DefaultCellStyle.Format = "N0";
@@ -377,23 +353,24 @@ public partial class MainForm : Form
         var daily = _usage?.Daily;
         if (daily == null || daily.Count == 0)
         {
-            tabCost.Controls.Add(new Label
+            var empty = new Label
             {
                 Text = "暂无数据",
-                Location = new Point(20, 20),
-                AutoSize = true
-            });
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            tabCost.Controls.Add(empty);
             return;
         }
 
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20) };
+        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
 
         var title = new Label
         {
             Text = "💵 费用明细（按日期）",
-            Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
-            Location = new Point(20, 15),
-            AutoSize = true
+            Font = new Font("Microsoft YaHei", 13, FontStyle.Bold),
+            Dock = DockStyle.Top,
+            Height = 30
         };
         panel.Controls.Add(title);
 
@@ -401,14 +378,14 @@ public partial class MainForm : Form
 
         var grid = new DataGridView
         {
-            Location = new Point(20, 50),
-            Width = 740,
-            Height = 480,
+            Dock = DockStyle.Fill,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
-            RowHeadersVisible = false
+            RowHeadersVisible = false,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.Fixed3D
         };
 
         grid.Columns.Add("Date", "日期");
@@ -417,9 +394,7 @@ public partial class MainForm : Form
         grid.Columns.Add("Cost", "费用");
 
         foreach (var item in sorted)
-        {
             grid.Rows.Add(item.Date, $"{item.Calls:N0}", $"{item.Tokens:N0}", $"¥{item.Cost:N4}");
-        }
 
         grid.Columns["Calls"].DefaultCellStyle.Format = "N0";
         grid.Columns["Tokens"].DefaultCellStyle.Format = "N0";
