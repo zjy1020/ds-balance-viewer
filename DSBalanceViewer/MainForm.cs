@@ -11,17 +11,6 @@ public partial class MainForm : Form
     private BalanceResponse? _balance;
     private UsageResponse? _usage;
 
-    // Dark theme colors
-    static readonly Color Bg = Color.FromArgb(13, 17, 23);
-    static readonly Color Surface = Color.FromArgb(22, 27, 34);
-    static readonly Color Border = Color.FromArgb(48, 54, 61);
-    static readonly Color TextPrimary = Color.FromArgb(201, 209, 217);
-    static readonly Color TextSecondary = Color.FromArgb(139, 148, 158);
-    static readonly Color TextMuted = Color.FromArgb(72, 79, 88);
-    static readonly Color AccentBlue = Color.FromArgb(88, 166, 255);
-    static readonly Color AccentGreen = Color.FromArgb(63, 185, 80);
-    static readonly Color AccentAmber = Color.FromArgb(210, 153, 29);
-
     public MainForm()
     {
         InitializeComponent();
@@ -35,22 +24,20 @@ public partial class MainForm : Form
         await RefreshData();
     }
 
-    // ========== Data ==========
+    // ========== Data Loading ==========
 
     private async Task RefreshData()
     {
         try
         {
             btnRefresh.Enabled = false;
-            lblStatus.Text = "● 加载中...";
-            lblStatus.ForeColor = AccentAmber;
+            lblStatus.Text = "加载中...";
 
             var key = _vault.GetActiveKey();
             if (string.IsNullOrWhiteSpace(key))
             {
-                var input = ShowNewKeyDialog();
-                if (input == null) { lblStatus.Text = "● 未配置 Key"; lblStatus.ForeColor = TextMuted; return; }
-                key = input;
+                key = ShowNewKeyDialog();
+                if (key == null) { lblStatus.Text = "未配置 API Key"; return; }
             }
 
             _api = new DeepSeekApiService(key);
@@ -61,22 +48,19 @@ public partial class MainForm : Form
             _usage = ut.Result;
 
             BuildUI();
-            lblStatus.Text = "● 在线";
-            lblStatus.ForeColor = AccentGreen;
-            lblLastUpdate.Text = $"最后更新: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
+            lblStatus.Text = $"最后更新: {DateTime.Now:yyyy-MM-dd HH:mm:ss}";
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
                                               || ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
-            lblStatus.Text = "● Key 无效";
-            lblStatus.ForeColor = Color.FromArgb(248, 81, 73);
-            MessageBox.Show("API Key 无效，请更换。", "认证失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            lblStatus.Text = "Key 无效";
+            MessageBox.Show("API Key 无效，请更换。", "认证失败");
             ShowKeyManager();
         }
         catch (Exception ex)
         {
-            lblStatus.Text = $"● {ex.Message}";
-            lblStatus.ForeColor = Color.FromArgb(248, 81, 73);
+            lblStatus.Text = $"错误: {ex.Message}";
+            MessageBox.Show($"请求失败: {ex.Message}", "错误");
         }
         finally
         {
@@ -88,14 +72,20 @@ public partial class MainForm : Form
     private string? ShowNewKeyDialog()
     {
         var input = Microsoft.VisualBasic.Interaction.InputBox(
-            "请输入 DeepSeek API Key：\n\n格式: 名称=sk-xxxx  (不加名称则默认为「默认」)",
+            "请输入 DeepSeek API Key：\n\n格式: 名称=sk-xxxx\n不加名称则默认为「默认」",
             "添加 API Key", "", -1, -1);
         if (string.IsNullOrWhiteSpace(input)) return null;
-        string name, key;
-        if (input.Contains('=')) { var p = input.Split('=', 2); name = p[0].Trim(); key = p[1].Trim(); }
-        else { name = "默认"; key = input.Trim(); }
-        _vault.SaveKey(name, key);
-        return key;
+
+        if (input.Contains('='))
+        {
+            var p = input.Split('=', 2);
+            _vault.SaveKey(p[0].Trim(), p[1].Trim());
+        }
+        else
+        {
+            _vault.SaveKey("默认", input.Trim());
+        }
+        return _vault.GetActiveKey();
     }
 
     private void ShowKeyManager()
@@ -104,158 +94,233 @@ public partial class MainForm : Form
         var dlg = new Form
         {
             Text = "管理 API Keys",
-            Size = new Size(420, 300),
+            Size = new Size(400, 280),
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false, MinimizeBox = false,
-            BackColor = Surface, ForeColor = TextPrimary, Font = Font
+            MaximizeBox = false,
+            MinimizeBox = false,
+            Font = Font
         };
-        var list = new ListBox { Location = new Point(12, 12), Size = new Size(380, 160), IntegralHeight = false, BackColor = Bg, ForeColor = TextPrimary, BorderStyle = BorderStyle.None };
-        foreach (var k in keys) list.Items.Add(k.IsActive ? $"★ {k.Name}" : $"   {k.Name}");
+
+        var list = new ListBox
+        {
+            Location = new Point(12, 12),
+            Size = new Size(360, 150),
+            IntegralHeight = false
+        };
+        foreach (var k in keys)
+            list.Items.Add(k.IsActive ? $"[当前] {k.Name}" : $"        {k.Name}");
         dlg.Controls.Add(list);
-        var bUse = NewDlgBtn("使用", 12, 180); var bAdd = NewDlgBtn("新增", 100, 180); var bDel = NewDlgBtn("删除", 188, 180); var bCl = NewDlgBtn("关闭", 320, 180);
-        dlg.Controls.Add(bUse); dlg.Controls.Add(bAdd); dlg.Controls.Add(bDel); dlg.Controls.Add(bCl);
-        bUse.Click += (_, _) => { if (list.SelectedIndex >= 0) { _vault.SetActive(keys[list.SelectedIndex].Name); dlg.Close(); } };
+
+        Button btn(string t, int x) => new() { Text = t, Location = new Point(x, 172), Size = new Size(80, 28) };
+        var bUse = btn("使用", 12);
+        var bAdd = btn("新增", 100);
+        var bDel = btn("删除", 188);
+        var bClose = btn("关闭", 290);
+
+        bUse.Click += (_, _) =>
+        {
+            if (list.SelectedIndex >= 0 && list.SelectedIndex < keys.Count)
+            {
+                _vault.SetActive(keys[list.SelectedIndex].Name);
+                dlg.Close();
+                lblStatus.Text = $"已切换到「{keys[list.SelectedIndex].Name}」";
+            }
+        };
         bAdd.Click += (_, _) => { var k = ShowNewKeyDialog(); if (k != null) dlg.Close(); };
-        bDel.Click += (_, _) => { if (list.SelectedIndex >= 0 && MessageBox.Show("删除？", "", MessageBoxButtons.YesNo) == DialogResult.Yes) { _vault.DeleteKey(keys[list.SelectedIndex].Name); dlg.Close(); } };
-        bCl.Click += (_, _) => dlg.Close();
+        bDel.Click += (_, _) =>
+        {
+            if (list.SelectedIndex >= 0 && list.SelectedIndex < keys.Count
+                && MessageBox.Show("确定删除？", "", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            {
+                _vault.DeleteKey(keys[list.SelectedIndex].Name);
+                dlg.Close();
+            }
+        };
+        bClose.Click += (_, _) => dlg.Close();
+
+        dlg.Controls.Add(bUse);
+        dlg.Controls.Add(bAdd);
+        dlg.Controls.Add(bDel);
+        dlg.Controls.Add(bClose);
         dlg.ShowDialog(this);
     }
 
-    static Button NewDlgBtn(string text, int x, int y) => new() { Text = text, Location = new Point(x, y), Size = new Size(80, 28), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(33, 38, 45), ForeColor = TextPrimary, Font = new Font("Microsoft YaHei", 9) };
-
-    // ========== Build ==========
+    // ========== UI Build ==========
 
     private void BuildUI()
     {
         mainPanel.Controls.Clear();
-        int y = 0;
-
-        // ── Section: Balance ──
-        mainPanel.Controls.Add(SectionLabel("BALANCE", ref y));
-        var balances = _balance?.BalanceInfos?.FirstOrDefault();
-        if (balances != null)
+        var parent = new FlowLayoutPanel
         {
-            var row = new FlowLayoutPanel { Location = new Point(0, y), Width = mainPanel.ClientSize.Width - 32, Height = 90, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top };
-            row.Controls.Add(BalanceCard("总余额", $"¥{balances.TotalBalance}", AccentBlue));
-            row.Controls.Add(BalanceCard("充值余额", $"¥{balances.ToppedUpBalance}", AccentGreen));
-            row.Controls.Add(BalanceCard("赠送余额", $"¥{balances.GrantedBalance}", AccentAmber));
-            mainPanel.Controls.Add(row);
-            y += 100;
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoScroll = false
+        };
+        mainPanel.Controls.Add(parent);
+
+        // ── Balance Section ──
+        var bal = _balance?.BalanceInfos?.FirstOrDefault();
+        if (bal != null)
+        {
+            parent.Controls.Add(SectionTitle("账户余额"));
+            var row = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = true,
+                Margin = new Padding(0, 4, 0, 16)
+            };
+            row.Controls.Add(MetricCard("总余额", $"¥{bal.TotalBalance}", Color.FromArgb(0, 120, 212)));
+            row.Controls.Add(MetricCard("充值余额", $"¥{bal.ToppedUpBalance}", Color.FromArgb(0, 140, 90)));
+            row.Controls.Add(MetricCard("赠送余额", $"¥{bal.GrantedBalance}", Color.FromArgb(200, 130, 0)));
+            row.Controls.Add(MetricCard("币种", bal.Currency, Color.Gray));
+            parent.Controls.Add(row);
+        }
+        else
+        {
+            parent.Controls.Add(SectionTitle("账户余额"));
+            parent.Controls.Add(Placeholder("暂无余额数据"));
         }
 
-        // ── Section: Usage by Model ──
+        // ── Usage by Model Section ──
+        parent.Controls.Add(SectionTitle("用量（按模型）"));
         var byModel = _usage?.ByModel;
         if (byModel != null && byModel.Count > 0)
         {
-            mainPanel.Controls.Add(SectionLabel("USAGE BY MODEL", ref y));
-            var grid = NewGrid(ref y);
-            grid.Columns.Add("Model", "MODEL");
-            grid.Columns.Add("Calls", "CALLS");
-            grid.Columns.Add("Tokens", "TOKENS");
-            grid.Columns.Add("Cost", "COST");
-            foreach (var m in byModel)
-                grid.Rows.Add(m.Model, $"{m.Calls:N0}", $"{m.Tokens:N0}", $"¥{m.Cost:N4}");
-            grid.Columns["Calls"].DefaultCellStyle.Format = "N0";
-            grid.Columns["Tokens"].DefaultCellStyle.Format = "N0";
-            grid.Columns["Cost"].DefaultCellStyle.Format = "C";
-            mainPanel.Controls.Add(grid);
-            y += 220;
+            parent.Controls.Add(BuildModelGrid(byModel));
+        }
+        else
+        {
+            parent.Controls.Add(Placeholder("暂无用量数据（/billing/usage 返回为空或 404）"));
         }
 
-        // ── Section: Recent Usage ──
+        // ── Recent Activity Section ──
+        parent.Controls.Add(SectionTitle("近期活动"));
         var daily = _usage?.Daily;
         if (daily != null && daily.Count > 0)
         {
-            mainPanel.Controls.Add(SectionLabel("RECENT ACTIVITY", ref y));
-            var grid = NewGrid(ref y);
-            grid.Columns.Add("Date", "DATE");
-            grid.Columns.Add("Calls", "CALLS");
-            grid.Columns.Add("Tokens", "TOKENS");
-            grid.Columns.Add("Cost", "COST");
-            foreach (var d in daily.OrderByDescending(x => x.Date).Take(14))
-                grid.Rows.Add(d.Date, $"{d.Calls:N0}", $"{d.Tokens:N0}", $"¥{d.Cost:N4}");
-            grid.Columns["Calls"].DefaultCellStyle.Format = "N0";
-            grid.Columns["Tokens"].DefaultCellStyle.Format = "N0";
-            grid.Columns["Cost"].DefaultCellStyle.Format = "C";
-            mainPanel.Controls.Add(grid);
-            y += 220;
+            parent.Controls.Add(BuildDailyGrid(daily));
         }
-
-        if (y == 0)
+        else
         {
-            var empty = new Label { Text = "暂无数据\n\n点击「刷新」加载", Font = new Font("Microsoft YaHei", 14), ForeColor = TextMuted, TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Fill };
-            mainPanel.Controls.Add(empty);
+            parent.Controls.Add(Placeholder("暂无活动数据"));
         }
     }
 
     // ========== UI Components ==========
 
-    static Label SectionLabel(string text, ref int y) => new()
+    static Label SectionTitle(string text) => new()
     {
         Text = text,
-        Font = new Font("Consolas", 10, FontStyle.Bold),
-        ForeColor = TextSecondary,
-        Location = new Point(0, y + 8),
-        Size = new Size(700, 20),
-        AutoSize = false
+        Font = new Font("Microsoft YaHei", 12, FontStyle.Bold),
+        ForeColor = Color.FromArgb(50, 50, 50),
+        AutoSize = true,
+        Margin = new Padding(0, 12, 0, 0)
     };
 
-    static Panel BalanceCard(string label, string value, Color accent)
+    static Label Placeholder(string text) => new()
+    {
+        Text = text,
+        Font = new Font("Microsoft YaHei", 9),
+        ForeColor = Color.Gray,
+        AutoSize = true,
+        Margin = new Padding(0, 4, 0, 8)
+    };
+
+    static Panel MetricCard(string label, string value, Color accent)
     {
         var card = new Panel
         {
-            Width = 220,
-            Height = 78,
-            BackColor = Surface,
-            Margin = new Padding(0, 0, 10, 0),
-            Padding = new Padding(14)
+            AutoSize = true,
+            MinimumSize = new Size(140, 70),
+            BackColor = Color.FromArgb(250, 250, 252),
+            Padding = new Padding(14, 10, 14, 10),
+            Margin = new Padding(0, 0, 10, 8)
         };
         card.Paint += (_, e) =>
         {
-            using var pen = new Pen(Border);
+            using var pen = new Pen(Color.FromArgb(220, 220, 228));
             e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
         };
-        var lb = new Label { Text = label, Font = new Font("Consolas", 9), ForeColor = TextSecondary, Location = new Point(14, 12), AutoSize = true };
-        var vl = new Label { Text = value, Font = new Font("Consolas", 18, FontStyle.Bold), ForeColor = accent, Location = new Point(14, 34), AutoSize = true };
+        var lb = new Label { Text = label, Font = new Font("Microsoft YaHei", 9), ForeColor = Color.Gray, AutoSize = true, Location = new Point(14, 10) };
+        var vl = new Label { Text = value, Font = new Font("Microsoft YaHei", 18, FontStyle.Bold), ForeColor = accent, AutoSize = true, Location = new Point(14, 32) };
         card.Controls.Add(lb);
         card.Controls.Add(vl);
         return card;
     }
 
-    DataGridView NewGrid(ref int y)
+    DataGridView BuildModelGrid(List<ModelUsage> data)
     {
-        // Use a fixed width matching the panel width
-        var w = Math.Max(400, mainPanel.ClientSize.Width - 32);
         var grid = new DataGridView
         {
-            Location = new Point(0, y + 28),
-            Width = w,
-            Height = 190,
-            Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
+            AutoSize = true,
+            MinimumSize = new Size(720, 120),
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             RowHeadersVisible = false,
-            BackgroundColor = Surface,
-            ForeColor = TextPrimary,
-            GridColor = Border,
+            BackgroundColor = Color.White,
             BorderStyle = BorderStyle.None,
-            EnableHeadersVisualStyles = false,
-            Font = new Font("Consolas", 9)
+            Font = new Font("Microsoft YaHei", 9),
+            ColumnHeadersHeight = 32
         };
-        grid.ColumnHeadersDefaultCellStyle.BackColor = Bg;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = TextSecondary;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Consolas", 8, FontStyle.Bold);
-        grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(8, 4, 8, 4);
-        grid.DefaultCellStyle.BackColor = Surface;
-        grid.DefaultCellStyle.ForeColor = TextPrimary;
-        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(33, 38, 45);
-        grid.DefaultCellStyle.SelectionForeColor = AccentBlue;
-        grid.DefaultCellStyle.Padding = new Padding(8, 2, 8, 2);
-        grid.RowTemplate.Height = 26;
-        grid.ColumnHeadersHeight = 30;
+        grid.DefaultCellStyle.Padding = new Padding(8, 4, 8, 4);
+
+        grid.Columns.Add("Model", "模型");
+        grid.Columns.Add("Calls", "调用次数");
+        grid.Columns.Add("Tokens", "Token 消耗");
+        grid.Columns.Add("Cost", "费用");
+
+        foreach (var m in data)
+            grid.Rows.Add(m.Model, $"{m.Calls:N0}", $"{m.Tokens:N0}", $"¥{m.Cost:N4}");
+
+        grid.Columns["Calls"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        grid.Columns["Tokens"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        grid.Columns["Cost"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+
+        if (data.Count > 0)
+            grid.Height = grid.ColumnHeadersHeight + data.Count * grid.RowTemplate.Height + 4;
+
+        return grid;
+    }
+
+    DataGridView BuildDailyGrid(List<UsagePoint> data)
+    {
+        var sorted = data.OrderByDescending(d => d.Date).Take(14).ToList();
+        var grid = new DataGridView
+        {
+            AutoSize = true,
+            MinimumSize = new Size(720, 120),
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            RowHeadersVisible = false,
+            BackgroundColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            Font = new Font("Microsoft YaHei", 9),
+            ColumnHeadersHeight = 32
+        };
+        grid.DefaultCellStyle.Padding = new Padding(8, 4, 8, 4);
+
+        grid.Columns.Add("Date", "日期");
+        grid.Columns.Add("Calls", "调用次数");
+        grid.Columns.Add("Tokens", "Token 消耗");
+        grid.Columns.Add("Cost", "费用");
+
+        foreach (var d in sorted)
+            grid.Rows.Add(d.Date, $"{d.Calls:N0}", $"{d.Tokens:N0}", $"¥{d.Cost:N4}");
+
+        grid.Columns["Calls"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        grid.Columns["Tokens"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        grid.Columns["Cost"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+
+        if (sorted.Count > 0)
+            grid.Height = grid.ColumnHeadersHeight + sorted.Count * grid.RowTemplate.Height + 4;
+
         return grid;
     }
 }
