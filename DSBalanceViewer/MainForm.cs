@@ -15,7 +15,7 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         btnRefresh.Click += async (_, _) => await RefreshData();
-        btnChangeKey.Click += (_, _) => ChangeKey();
+        btnChangeKey.Click += (_, _) => ShowKeyManager();
     }
 
     protected override async void OnShown(EventArgs e)
@@ -23,6 +23,8 @@ public partial class MainForm : Form
         base.OnShown(e);
         await RefreshData();
     }
+
+    // ========== Data Loading ==========
 
     private async Task RefreshData()
     {
@@ -55,11 +57,10 @@ public partial class MainForm : Form
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
                                               || ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
-            _vault.DeleteKey();
-            lblStatus.Text = "Key 无效，请重新输入";
+            lblStatus.Text = "Key 无效";
             lblStatus.ForeColor = Color.Red;
-            MessageBox.Show("API Key 无效，请重新输入。", "认证失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            ChangeKey();
+            MessageBox.Show("API Key 无效，请更换 Key。", "认证失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            ShowKeyManager();
         }
         catch (Exception ex)
         {
@@ -76,218 +77,192 @@ public partial class MainForm : Form
 
     private string? GetApiKey()
     {
-        if (_vault.KeyExists())
-        {
-            var key = _vault.LoadKey();
-            if (!string.IsNullOrWhiteSpace(key)) return key;
-        }
+        var key = _vault.GetActiveKey();
+        if (!string.IsNullOrWhiteSpace(key)) return key;
 
-        var input = Microsoft.VisualBasic.Interaction.InputBox(
-            "请输入 DeepSeek API Key：", "API Key", "", -1, -1);
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            lblStatus.Text = "未提供 API Key";
-            return null;
-        }
-
-        _vault.SaveKey(input.Trim());
-        return input.Trim();
+        return ShowNewKeyDialog();
     }
 
-    private void ChangeKey()
+    private string? ShowNewKeyDialog()
     {
-        _vault.DeleteKey();
         var input = Microsoft.VisualBasic.Interaction.InputBox(
-            "请输入新的 DeepSeek API Key：", "更换 API Key", "", -1, -1);
-        if (!string.IsNullOrWhiteSpace(input))
+            "请输入 DeepSeek API Key：\n\n（可选：输入 '名称=Key' 格式命名，如：\n主账号=sk-xxxx）",
+            "添加 API Key", "", -1, -1);
+        if (string.IsNullOrWhiteSpace(input)) return null;
+
+        string name, key;
+        if (input.Contains('='))
         {
-            _vault.SaveKey(input.Trim());
-            lblStatus.Text = "Key 已更新，点击刷新";
+            var parts = input.Split('=', 2);
+            name = parts[0].Trim();
+            key = parts[1].Trim();
         }
+        else
+        {
+            name = "默认";
+            key = input.Trim();
+        }
+
+        _vault.SaveKey(name, key);
+        lblStatus.Text = $"Key「{name}」已保存";
+        return key;
     }
 
-    // ---- Build methods for each tab ----
+    // ========== Key Manager ==========
+
+    private void ShowKeyManager()
+    {
+        var keys = _vault.ListKeys();
+        var form = new Form
+        {
+            Text = "管理 API Keys",
+            Size = new Size(450, 320),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            Font = this.Font
+        };
+
+        var listBox = new ListBox
+        {
+            Location = new Point(12, 12),
+            Size = new Size(410, 160),
+            IntegralHeight = false
+        };
+        foreach (var k in keys)
+            listBox.Items.Add(k.IsActive ? $"★ {k.Name}" : $"   {k.Name}");
+        form.Controls.Add(listBox);
+
+        var btnUse = new Button { Text = "使用选中", Location = new Point(12, 182), Size = new Size(90, 28) };
+        var btnAdd = new Button { Text = "新增...", Location = new Point(108, 182), Size = new Size(90, 28) };
+        var btnDel = new Button { Text = "删除选中", Location = new Point(204, 182), Size = new Size(90, 28) };
+        var btnClose = new Button { Text = "关闭", Location = new Point(340, 182), Size = new Size(80, 28) };
+
+        form.Controls.Add(btnUse);
+        form.Controls.Add(btnAdd);
+        form.Controls.Add(btnDel);
+        form.Controls.Add(btnClose);
+
+        btnUse.Click += (_, _) =>
+        {
+            if (listBox.SelectedIndex >= 0 && listBox.SelectedIndex < keys.Count)
+            {
+                _vault.SetActive(keys[listBox.SelectedIndex].Name);
+                form.Close();
+                lblStatus.Text = $"已切换到「{keys[listBox.SelectedIndex].Name}」，点击刷新";
+            }
+        };
+
+        btnAdd.Click += (_, _) =>
+        {
+            var newKey = ShowNewKeyDialog();
+            if (newKey != null) form.Close();
+        };
+
+        btnDel.Click += (_, _) =>
+        {
+            if (listBox.SelectedIndex >= 0 && listBox.SelectedIndex < keys.Count)
+            {
+                var name = keys[listBox.SelectedIndex].Name;
+                var result = MessageBox.Show($"确定删除 Key「{name}」吗？", "确认删除",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result == DialogResult.Yes)
+                {
+                    _vault.DeleteKey(name);
+                    form.Close();
+                    lblStatus.Text = $"已删除「{name}」";
+                }
+            }
+        };
+
+        btnClose.Click += (_, _) => form.Close();
+
+        form.ShowDialog(this);
+    }
+
+    // ========== Tab Builders ==========
 
     private void BuildDashboard()
     {
         tabDashboard.Controls.Clear();
+        var panel = NewScrollPanel();
 
-        var main = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            Padding = new Padding(16),
-            AutoScroll = true
-        };
-        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        // ---- 余额卡片 ----
+        // 余额卡片
         var balance = _balance?.BalanceInfos?.FirstOrDefault();
-        var card = MakeCard("💰 余额", Color.FromArgb(240, 248, 255), new (string, FontStyle, Color)[] {
-            ($"总余额: ¥{balance?.TotalBalance ?? "—"}", FontStyle.Bold, Color.FromArgb(0, 120, 212)),
-            ($"赠送余额: ¥{balance?.GrantedBalance ?? "—"}   充值余额: ¥{balance?.ToppedUpBalance ?? "—"}", FontStyle.Regular, Color.Gray),
-        });
-        main.Controls.Add(card);
-        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        if (balance != null)
+        {
+            var card = NewCard(Color.FromArgb(240, 248, 255));
+            card.Controls.Add(NewBoldLabel("💰 余额", 13, 16, 10, Color.Black));
+            card.Controls.Add(NewBoldLabel($"¥{balance.TotalBalance}", 24, 16, 36, Color.FromArgb(0, 120, 212)));
+            card.Controls.Add(NewLabel(
+                $"充值余额: ¥{balance.ToppedUpBalance}    赠送余额: ¥{balance.GrantedBalance}    币种: {balance.Currency}",
+                9, 16, 68, Color.Gray));
+            card.Height = 95;
+            panel.Controls.Add(card);
+        }
 
-        // ---- 用量与费用 ----
+        // 用量概览
         if (_usage?.Daily != null && _usage.Daily.Count > 0)
         {
             var totalTokens = _pricing.TotalTokens(_usage.Daily);
             var totalCalls = _pricing.TotalCalls(_usage.Daily);
-
-            var usageCard = MakeCard("📊 用量概览", Color.FromArgb(245, 255, 245), new (string, FontStyle, Color)[] {
-                ($"Token: {totalTokens:N0}   调用次数: {totalCalls:N0}", FontStyle.Regular, Color.Black),
-            });
-            main.Controls.Add(usageCard);
-            main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
             var totalCost = _pricing.TotalCost(_usage.Daily);
-            var costCard = MakeCard("💵 本月费用", Color.FromArgb(255, 250, 240), new (string, FontStyle, Color)[] {
-                ($"¥{totalCost:N4}", FontStyle.Bold, Color.DarkOrange),
-            });
-            main.Controls.Add(costCard);
-            main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            var card2 = NewCard(Color.FromArgb(245, 255, 245));
+            card2.Controls.Add(NewBoldLabel("📊 用量概览", 13, 16, 10, Color.Black));
+            card2.Controls.Add(NewLabel($"Token 消耗: {totalTokens:N0}    调用次数: {totalCalls:N0}", 10, 16, 36, Color.Black));
+            card2.Controls.Add(NewBoldLabel($"本月费用: ¥{totalCost:N4}", 14, 16, 58, Color.DarkOrange));
+            card2.Height = 90;
+            panel.Controls.Add(card2);
         }
 
-        // 填充剩余空间
-        main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        main.Controls.Add(new Panel());
-
-        tabDashboard.Controls.Add(main);
-    }
-
-    // Helper: create a styled card panel
-    private Panel MakeCard(string title, Color backColor, (string Text, FontStyle Style, Color Color)[] lines)
-    {
-        var card = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 110,
-            BackColor = backColor,
-            Padding = new Padding(16),
-            Margin = new Padding(0, 0, 0, 12)
-        };
-
-        var titleLabel = new Label
-        {
-            Text = title,
-            Font = new Font("Microsoft YaHei", 13, FontStyle.Bold),
-            Dock = DockStyle.Top,
-            Height = 28
-        };
-        card.Controls.Add(titleLabel);
-
-        var y = 34;
-        foreach (var (text, style, color) in lines)
-        {
-            var fontStyle = style == FontStyle.Bold
-                ? new Font("Microsoft YaHei", style == FontStyle.Bold ? 18 : 10, style)
-                : new Font("Microsoft YaHei", 10);
-            var lbl = new Label
-            {
-                Text = text,
-                Font = fontStyle,
-                ForeColor = color,
-                Location = new Point(16, y),
-                AutoSize = true
-            };
-            card.Controls.Add(lbl);
-            y += style == FontStyle.Bold ? 34 : 22;
-        }
-
-        return card;
+        tabDashboard.Controls.Add(panel);
     }
 
     private void BuildBalanceTab()
     {
         tabBalance.Controls.Clear();
+        var panel = NewScrollPanel();
+        panel.Padding = new Padding(40, 24, 40, 24);
 
-        var main = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            Padding = new Padding(40, 24, 40, 24),
-            AutoScroll = true
-        };
-        main.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        var title = new Label
-        {
-            Text = "💰 账户余额",
-            Font = new Font("Microsoft YaHei", 18, FontStyle.Bold),
-            Dock = DockStyle.Top,
-            Height = 36,
-            Margin = new Padding(0, 0, 0, 16)
-        };
-        main.Controls.Add(title);
-        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        var balTitle = NewBoldLabel("💰 账户余额", 18, 0, 0, Color.Black);
+        balTitle.Dock = DockStyle.Top;
+        balTitle.Height = 40;
+        panel.Controls.Add(balTitle);
 
         var balance = _balance?.BalanceInfos?.FirstOrDefault();
         if (balance == null)
         {
-            main.Controls.Add(new Label { Text = "暂无数据", AutoSize = true });
-            tabBalance.Controls.Add(main);
+            panel.Controls.Add(NewLabel("暂无数据", 10, 0, 50, Color.Gray));
+            tabBalance.Controls.Add(panel);
             return;
         }
 
-        var items = new (string Label, string Value, Color Color)[]
-        {
+        var items = new[] {
             ("总余额", $"¥{balance.TotalBalance}", Color.FromArgb(0, 120, 212)),
             ("充值余额", $"¥{balance.ToppedUpBalance}", Color.FromArgb(0, 150, 100)),
             ("赠送余额", $"¥{balance.GrantedBalance}", Color.FromArgb(200, 120, 0)),
         };
 
+        int y = 50;
         foreach (var (label, value, color) in items)
         {
             var card = new Panel
             {
-                Dock = DockStyle.Top,
-                Height = 90,
+                Location = new Point(0, y),
+                Size = new Size(panel.ClientSize.Width - 80, 90),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
                 BackColor = Color.White,
-                Margin = new Padding(0, 0, 0, 12),
                 Padding = new Padding(20)
             };
-
-            var lbl = new Label
-            {
-                Text = label,
-                Font = new Font("Microsoft YaHei", 12),
-                ForeColor = Color.Gray,
-                Location = new Point(20, 12),
-                AutoSize = true
-            };
-            card.Controls.Add(lbl);
-
-            var val = new Label
-            {
-                Text = value,
-                Font = new Font("Microsoft YaHei", 26, FontStyle.Bold),
-                ForeColor = color,
-                Location = new Point(20, 38),
-                AutoSize = true
-            };
-            card.Controls.Add(val);
-
-            main.Controls.Add(card);
-            main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            card.Controls.Add(NewLabel(label, 12, 20, 12, Color.Gray));
+            card.Controls.Add(NewBoldLabel(value, 26, 20, 38, color));
+            panel.Controls.Add(card);
+            y += 102;
         }
 
-        main.Controls.Add(new Label
-        {
-            Text = $"币种: {balance.Currency}",
-            Font = new Font("Microsoft YaHei", 10),
-            ForeColor = Color.Gray,
-            Margin = new Padding(0, 4, 0, 0),
-            AutoSize = true
-        });
-        main.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-
-        // fill rest
-        main.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        main.Controls.Add(new Panel());
-
-        tabBalance.Controls.Add(main);
+        tabBalance.Controls.Add(panel);
     }
 
     private void BuildUsageTab()
@@ -297,26 +272,15 @@ public partial class MainForm : Form
         var byModel = _usage?.ByModel;
         if (byModel == null || byModel.Count == 0)
         {
-            var empty = new Label
-            {
-                Text = "暂无用量数据",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter
-            };
+            var empty = new Label { Text = "暂无用量数据", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.Gray };
             tabUsage.Controls.Add(empty);
             return;
         }
 
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
-
-        var title = new Label
-        {
-            Text = "📈 Token 用量（按模型）",
-            Font = new Font("Microsoft YaHei", 13, FontStyle.Bold),
-            Dock = DockStyle.Top,
-            Height = 30
-        };
-        panel.Controls.Add(title);
+        var usageTitle = NewBoldLabel("📈 用量（按模型）", 13, 12, 8, Color.Black);
+        usageTitle.Dock = DockStyle.Top;
+        usageTitle.Height = 30;
+        usageTitle.Padding = new Padding(12, 8, 0, 0);
 
         var grid = new DataGridView
         {
@@ -327,12 +291,11 @@ public partial class MainForm : Form
             AllowUserToDeleteRows = false,
             RowHeadersVisible = false,
             BackgroundColor = Color.White,
-            BorderStyle = BorderStyle.Fixed3D
+            BorderStyle = BorderStyle.None
         };
-
         grid.Columns.Add("Model", "模型");
         grid.Columns.Add("Calls", "调用次数");
-        grid.Columns.Add("Tokens", "Token 消耗");
+        grid.Columns.Add("Tokens", "Token");
         grid.Columns.Add("Cost", "费用");
 
         foreach (var item in byModel)
@@ -342,8 +305,8 @@ public partial class MainForm : Form
         grid.Columns["Tokens"].DefaultCellStyle.Format = "N0";
         grid.Columns["Cost"].DefaultCellStyle.Format = "C";
 
-        panel.Controls.Add(grid);
-        tabUsage.Controls.Add(panel);
+        tabUsage.Controls.Add(grid);
+        tabUsage.Controls.Add(usageTitle);
     }
 
     private void BuildCostTab()
@@ -353,26 +316,15 @@ public partial class MainForm : Form
         var daily = _usage?.Daily;
         if (daily == null || daily.Count == 0)
         {
-            var empty = new Label
-            {
-                Text = "暂无数据",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter
-            };
+            var empty = new Label { Text = "暂无数据", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, ForeColor = Color.Gray };
             tabCost.Controls.Add(empty);
             return;
         }
 
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12) };
-
-        var title = new Label
-        {
-            Text = "💵 费用明细（按日期）",
-            Font = new Font("Microsoft YaHei", 13, FontStyle.Bold),
-            Dock = DockStyle.Top,
-            Height = 30
-        };
-        panel.Controls.Add(title);
+        var costTitle = NewBoldLabel("💵 费用明细（按日期）", 13, 12, 8, Color.Black);
+        costTitle.Dock = DockStyle.Top;
+        costTitle.Height = 30;
+        costTitle.Padding = new Padding(12, 8, 0, 0);
 
         var sorted = daily.OrderByDescending(d => d.Date).ToList();
 
@@ -385,12 +337,11 @@ public partial class MainForm : Form
             AllowUserToDeleteRows = false,
             RowHeadersVisible = false,
             BackgroundColor = Color.White,
-            BorderStyle = BorderStyle.Fixed3D
+            BorderStyle = BorderStyle.None
         };
-
         grid.Columns.Add("Date", "日期");
         grid.Columns.Add("Calls", "调用次数");
-        grid.Columns.Add("Tokens", "Token 消耗");
+        grid.Columns.Add("Tokens", "Token");
         grid.Columns.Add("Cost", "费用");
 
         foreach (var item in sorted)
@@ -400,7 +351,43 @@ public partial class MainForm : Form
         grid.Columns["Tokens"].DefaultCellStyle.Format = "N0";
         grid.Columns["Cost"].DefaultCellStyle.Format = "C";
 
-        panel.Controls.Add(grid);
-        tabCost.Controls.Add(panel);
+        tabCost.Controls.Add(grid);
+        tabCost.Controls.Add(costTitle);
     }
+
+    // ========== UI Helpers ==========
+
+    private static Panel NewScrollPanel() => new()
+    {
+        Dock = DockStyle.Fill,
+        AutoScroll = true,
+        Padding = new Padding(16)
+    };
+
+    private static Panel NewCard(Color bg) => new()
+    {
+        Dock = DockStyle.Top,
+        BackColor = bg,
+        Padding = new Padding(16),
+        Height = 80,
+        Margin = new Padding(0, 0, 0, 10)
+    };
+
+    private static Label NewBoldLabel(string text, float size, int x, int y, Color color) => new()
+    {
+        Text = text,
+        Font = new Font("Microsoft YaHei", size, FontStyle.Bold),
+        ForeColor = color,
+        Location = new Point(x, y),
+        AutoSize = true
+    };
+
+    private static Label NewLabel(string text, float size, int x, int y, Color color) => new()
+    {
+        Text = text,
+        Font = new Font("Microsoft YaHei", size),
+        ForeColor = color,
+        Location = new Point(x, y),
+        AutoSize = true
+    };
 }

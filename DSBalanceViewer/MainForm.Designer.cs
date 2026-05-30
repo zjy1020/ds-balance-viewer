@@ -39,46 +39,39 @@ partial class MainForm
         this.tabControl.Dock = DockStyle.Fill;
         this.tabControl.SelectedIndex = 0;
 
-        // tab pages
         this.tabDashboard.Text = "仪表盘";
         this.tabBalance.Text = "余额";
         this.tabUsage.Text = "用量";
         this.tabCost.Text = "费用";
 
-        // status bar: TableLayoutPanel at bottom
-        var statusBar = new TableLayoutPanel
+        // status bar
+        var statusBar = new Panel
         {
             Dock = DockStyle.Bottom,
             Height = 36,
-            ColumnCount = 3,
             Padding = new Padding(8, 4, 8, 4)
         };
-        statusBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // status text, fills rest
-        statusBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));       // change-key button
-        statusBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));       // refresh button
 
-        // lblStatus
         this.lblStatus.Text = "就绪";
+        this.lblStatus.Dock = DockStyle.Left;
         this.lblStatus.TextAlign = ContentAlignment.MiddleLeft;
-        this.lblStatus.Dock = DockStyle.Fill;
         this.lblStatus.AutoSize = true;
 
-        // btnChangeKey
         this.btnChangeKey.Text = "更换Key";
+        this.btnChangeKey.Dock = DockStyle.Right;
         this.btnChangeKey.AutoSize = true;
-        this.btnChangeKey.Margin = new Padding(4, 0, 4, 0);
 
-        // btnRefresh
         this.btnRefresh.Text = "刷新";
+        this.btnRefresh.Dock = DockStyle.Right;
         this.btnRefresh.AutoSize = true;
 
-        statusBar.Controls.Add(this.lblStatus, 0, 0);
-        statusBar.Controls.Add(this.btnChangeKey, 1, 0);
-        statusBar.Controls.Add(this.btnRefresh, 2, 0);
+        statusBar.Controls.Add(this.btnRefresh);
+        statusBar.Controls.Add(this.btnChangeKey);
+        statusBar.Controls.Add(this.lblStatus);
 
         // MainForm
         this.ClientSize = new Size(780, 560);
-        this.MinimumSize = new Size(600, 400);
+        this.MinimumSize = new Size(560, 380);
         this.Text = "DeepSeek 用量仪表盘";
         this.StartPosition = FormStartPosition.CenterScreen;
         this.Font = new Font("Microsoft YaHei", 9);
